@@ -83,8 +83,10 @@ def test_cabecalhos_internos_do_servico_nao_vazam(cliente):
 def test_rota_desconhecida_ou_com_ponto_ponto(cliente, servicos):
     assert cliente.get("/admin").status_code == 404
     assert cliente.get("/saude/x").status_code == 404
-    assert cliente.get("/chamados/../auth/login").status_code in (404, 200)  # o cliente HTTP pode normalizar o caminho
-    assert cliente.get("/chamados/%2e%2e/auth/login").status_code == 404
+    # nenhuma tentativa de sair da rota de um serviço chega a outro caminho dele
+    cliente.get("/chamados/%2e%2e/auth/login")
+    cliente.get("/chamados/../auth/login")
+    assert all(".." not in r.url.path for r in servicos.requisicoes)
     assert all(r.url.path != "/auth/login" for r in servicos.requisicoes if r.url.host == "chamados")
 
 

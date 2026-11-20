@@ -88,10 +88,9 @@ def test_disjuntor_abre_depois_de_falhas_seguidas_e_responde_sem_chamar_a_rede(c
     assert len(externos.requisicoes) == antes  # disjuntor aberto: nem tentou a rede
 
 
-def test_disjuntor_libera_uma_tentativa_depois_da_espera(monkeypatch):
+def test_disjuntor_libera_uma_tentativa_depois_da_espera():
     relogio = [100.0]
-    monkeypatch.setattr("app.clientes.time.monotonic", lambda: relogio[0])
-    d = Disjuntor(falhas_max=2, espera=10)
+    d = Disjuntor(falhas_max=2, espera=10, relogio=lambda: relogio[0])
     d.falha(); d.falha()
     assert d.aberto and not d.permite()
     relogio[0] += 11

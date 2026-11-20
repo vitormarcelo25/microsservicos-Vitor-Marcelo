@@ -4,7 +4,6 @@ from datetime import datetime, timedelta, timezone
 import jwt
 
 from app import config
-from tests.conftest import gerar_token
 
 NOVO = {"patrimonio": "PAT-9", "tipo": "outro", "descricao": "X", "setor": "TI"}
 

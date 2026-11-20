@@ -24,9 +24,10 @@ log = logging.getLogger("chamados.clientes")
 class Disjuntor:
     """Fechado = deixa passar. Aberto = recusa de imediato até acabar a espera."""
 
-    def __init__(self, falhas_max: int, espera: float):
+    def __init__(self, falhas_max: int, espera: float, relogio=time.monotonic):
         self.falhas_max = falhas_max
         self.espera = espera
+        self._relogio = relogio  # injetável, para os testes controlarem o tempo
         self._falhas = 0
         self._aberto_ate: float | None = None
         self._trava = threading.Lock()
@@ -34,13 +35,13 @@ class Disjuntor:
     @property
     def aberto(self) -> bool:
         with self._trava:
-            return self._aberto_ate is not None and time.monotonic() < self._aberto_ate
+            return self._aberto_ate is not None and self._relogio() < self._aberto_ate
 
     def permite(self) -> bool:
         with self._trava:
             if self._aberto_ate is None:
                 return True
-            if time.monotonic() < self._aberto_ate:
+            if self._relogio() < self._aberto_ate:
                 return False
             # Acabou a espera: libera uma tentativa. Se falhar de novo, reabre na hora.
             self._aberto_ate = None
@@ -56,7 +57,7 @@ class Disjuntor:
         with self._trava:
             self._falhas += 1
             if self._falhas >= self.falhas_max:
-                self._aberto_ate = time.monotonic() + self.espera
+                self._aberto_ate = self._relogio() + self.espera
 
 
 _http = httpx.Client(timeout=httpx.Timeout(config.CLIENTE_TIMEOUT, connect=config.CLIENTE_TIMEOUT_CONEXAO))

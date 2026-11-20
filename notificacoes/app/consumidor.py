@@ -9,7 +9,7 @@ Garantias:
 """
 import logging
 import threading
-from datetime import datetime, timezone
+from datetime import datetime
 
 import redis
 from sqlalchemy.orm import Session, sessionmaker
