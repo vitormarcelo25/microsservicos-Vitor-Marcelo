@@ -1,0 +1,136 @@
+# HelpDesk TI em microsserviços. Suba tudo com:  docker compose up --build
+#
+# Só o gateway publica porta (8000, e só no próprio computador). Os serviços, o Redis e os
+# volumes dos bancos ficam na rede "interna", que não tem acesso de fora nem à internet.
+name: helpdesk
+
+x-servico: &servico
+  restart: unless-stopped
+  read_only: true
+  tmpfs:
+    - /tmp
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  networks:
+    - interna
+
+x-saude: &saude
+  # a imagem slim não tem curl: usamos o próprio Python
+  test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/saude', timeout=2)"]
+  interval: 5s
+  timeout: 3s
+  retries: 12
+  start_period: 10s
+
+services:
+  gateway:
+    <<: *servico
+    build: ./gateway
+    ports:
+      - "127.0.0.1:8000:8000"   # única porta publicada; só acessível pelo próprio computador
+    networks:
+      - interna
+      - publica
+    depends_on:                 # só espera subir: se um serviço cair depois, o gateway continua de pé
+      usuarios:
+        condition: service_started
+      inventario:
+        condition: service_started
+      chamados:
+        condition: service_started
+      notificacoes:
+        condition: service_started
+    healthcheck: *saude
+
+  usuarios:
+    <<: *servico
+    build: ./usuarios
+    environment:
+      JWT_SEGREDO: ${JWT_SEGREDO:-}
+      TOKEN_MINUTOS: ${TOKEN_MINUTOS:-60}
+      DADOS_EXEMPLO: ${DADOS_EXEMPLO:-1}
+      SENHA_EXEMPLO: ${SENHA_EXEMPLO:-Helpdesk2026}
+    volumes:
+      - usuarios-dados:/dados        # banco de usuários (só este serviço monta)
+      - segredos:/segredos           # este serviço cria o segredo dos tokens, se não houver JWT_SEGREDO
+    healthcheck: *saude
+
+  inventario:
+    <<: *servico
+    build: ./inventario
+    environment:
+      JWT_SEGREDO: ${JWT_SEGREDO:-}
+      DADOS_EXEMPLO: ${DADOS_EXEMPLO:-1}
+    volumes:
+      - inventario-dados:/dados      # banco de inventário
+      - segredos:/segredos:ro
+    depends_on:
+      usuarios:
+        condition: service_healthy   # só para o segredo dos tokens já existir
+    healthcheck: *saude
+
+  chamados:
+    <<: *servico
+    build: ./chamados
+    environment:
+      JWT_SEGREDO: ${JWT_SEGREDO:-}
+      DADOS_EXEMPLO: ${DADOS_EXEMPLO:-1}
+      USUARIOS_URL: http://usuarios:8000
+      INVENTARIO_URL: http://inventario:8000
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - chamados-dados:/dados        # banco de chamados
+      - segredos:/segredos:ro
+    depends_on:
+      usuarios:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck: *saude
+
+  notificacoes:
+    <<: *servico
+    build: ./notificacoes
+    environment:
+      JWT_SEGREDO: ${JWT_SEGREDO:-}
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - notificacoes-dados:/dados    # banco de notificações
+      - segredos:/segredos:ro
+    depends_on:
+      usuarios:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck: *saude
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]   # a fila sobrevive a reinícios
+    volumes:
+      - redis-dados:/data
+    networks:
+      - interna
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+networks:
+  publica: {}
+  interna:
+    internal: true    # sem acesso de fora e sem saída para a internet
+
+volumes:
+  usuarios-dados:
+  inventario-dados:
+  chamados-dados:
+  notificacoes-dados:
+  redis-dados:
+  segredos:

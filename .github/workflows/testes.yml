@@ -1,0 +1,39 @@
+name: Testes e segurança
+on: [push, pull_request]
+
+# O workflow só pode ler o código (privilégio mínimo)
+permissions:
+  contents: read
+
+jobs:
+  testes:
+    name: Testes · ${{ matrix.servico }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        servico: [usuarios, inventario, chamados, notificacoes, gateway]
+    defaults:
+      run:
+        working-directory: ${{ matrix.servico }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - name: Testes do serviço (inclui testes de segurança)
+        run: pytest -q
+      - name: Dependências com falhas conhecidas
+        run: pip-audit -r requirements.txt
+
+  compose:
+    name: docker-compose.yml é válido
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - run: docker compose config --quiet
