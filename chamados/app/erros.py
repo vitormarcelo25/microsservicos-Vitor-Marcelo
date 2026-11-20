@@ -1,4 +1,4 @@
-"""Erros de negócio compartilhados pelos módulos."""
+"""Erros de negócio e de infraestrutura do serviço de Chamados."""
 
 
 class NaoEncontrado(Exception):
@@ -11,3 +11,11 @@ class RegraDeNegocio(Exception):
 
 class SemPermissao(Exception):
     """O usuário está logado, mas não pode fazer esta operação."""
+
+
+class ServicoIndisponivel(Exception):
+    """Outro serviço (Usuários ou Inventário) não respondeu a tempo ou está fora do ar."""
+
+    def __init__(self, servico: str):
+        super().__init__(servico)
+        self.servico = servico
